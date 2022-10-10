@@ -264,6 +264,7 @@ class MemoryEfficientCrossAttention(nn.Module):
             .permute(0, 2, 1, 3)
             .reshape(b, out.shape[1], self.heads * self.dim_head)
         )
+        out = out.to(dtype=x.dtype) # cast back to original dtype
         return self.to_out(out)
 
 
