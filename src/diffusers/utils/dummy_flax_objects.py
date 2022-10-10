@@ -11,6 +11,27 @@ class FlaxModelMixin(metaclass=DummyObject):
         requires_backends(self, ["flax"])
 
 
+class FlaxUNet2DConditionModel(metaclass=DummyObject):
+    _backends = ["flax"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["flax"])
+
+
+class FlaxAutoencoderKL(metaclass=DummyObject):
+    _backends = ["flax"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["flax"])
+
+
+class FlaxDiffusionPipeline(metaclass=DummyObject):
+    _backends = ["flax"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["flax"])
+
+
 class FlaxDDIMScheduler(metaclass=DummyObject):
     _backends = ["flax"]
 
@@ -46,7 +67,7 @@ class FlaxPNDMScheduler(metaclass=DummyObject):
         requires_backends(self, ["flax"])
 
 
-class FlaxUNet2DConditionModel(metaclass=DummyObject):
+class FlaxSchedulerMixin(metaclass=DummyObject):
     _backends = ["flax"]
 
     def __init__(self, *args, **kwargs):
