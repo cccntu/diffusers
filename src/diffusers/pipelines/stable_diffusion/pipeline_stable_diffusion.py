@@ -324,7 +324,14 @@ class StableDiffusionPipeline(DiffusionPipeline):
                 callback(i, t, latents)
 
         latents = 1 / 0.18215 * latents
-        image = self.vae.decode(latents).sample
+
+        # original code:
+        # image = self.vae.decode(latents).sample
+
+        # original code breaks with batch size too big, (>= 32 for default size), see https://github.com/pytorch/pytorch/issues/81665
+        image = [self.vae.decode(latents[i : i + 1]).sample for i in range(batch_size)]
+        image = torch.cat(image, dim=0)
+        # it's possible to do it in batches, but this is fast enough
 
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()
