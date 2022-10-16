@@ -7,11 +7,22 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-import xformers
-import xformers.ops
+
+try:
+    import xformers
+    import xformers.ops
+
+    xformer_available = True
+except ImportError:
+    xformer_available = False
 
 
 _USE_MEMORY_EFFICIENT_ATTENTION = int(os.environ.get("USE_MEMORY_EFFICIENT_ATTENTION", 0)) == 1
+if _USE_MEMORY_EFFICIENT_ATTENTION and not xformer_available:
+    import warnings
+
+    warnings.warn("xformers is not available, will not use memory efficient attention")
+    _USE_MEMORY_EFFICIENT_ATTENTION = False
 
 
 def exists(val):
