@@ -250,8 +250,8 @@ class MemoryEfficientCrossAttention(nn.Module):
     def forward(self, x, context=None, mask=None):
         q = self.to_q(x)
         context = default(context, x)
-        k = self.to_k(context)
-        v = self.to_v(context)
+        k = self.to_k(context if isinstance(context, torch.Tensor) else context[0])
+        v = self.to_v(context if isinstance(context, torch.Tensor) else context[1])
 
         b, _, _ = q.shape
         q, k, v = map(
@@ -331,8 +331,8 @@ class CrossAttention(nn.Module):
 
         query = self.to_q(hidden_states)
         context = context if context is not None else hidden_states
-        key = self.to_k(context)
-        value = self.to_v(context)
+        key = self.to_k(context if isinstance(context, torch.Tensor) else context[0])
+        value = self.to_v(context if isinstance(context, torch.Tensor) else context[1])
 
         dim = query.shape[-1]
 
