@@ -275,6 +275,12 @@ class StableDiffusionPipeline(
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
+        self.unet_config = unet.config
+        self.unet_dtype = unet.dtype
+        self.text_encoder_config = text_encoder.config
+        self.text_encoder_dtype = self.text_encoder.dtype
+        self.text_encoder_text_model_final_layer_norm = self.text_encoder.text_model.final_layer_norm
+
     def _encode_prompt(
         self,
         prompt,
@@ -392,7 +398,7 @@ class StableDiffusionPipeline(
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}"
                 )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder_config, "use_attention_mask") and self.text_encoder_config.use_attention_mask:
                 attention_mask = text_inputs.attention_mask.to(device)
             else:
                 attention_mask = None
@@ -412,12 +418,12 @@ class StableDiffusionPipeline(
                 # representations. The `last_hidden_states` that we typically use for
                 # obtaining the final prompt representations passes through the LayerNorm
                 # layer.
-                prompt_embeds = self.text_encoder.text_model.final_layer_norm(prompt_embeds)
+                prompt_embeds = self.text_encoder_text_model_final_layer_norm(prompt_embeds)
 
         if self.text_encoder is not None:
-            prompt_embeds_dtype = self.text_encoder.dtype
+            prompt_embeds_dtype = self.text_encoder_dtype
         elif self.unet is not None:
-            prompt_embeds_dtype = self.unet.dtype
+            prompt_embeds_dtype = self.unet_dtype
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
@@ -462,7 +468,7 @@ class StableDiffusionPipeline(
                 return_tensors="pt",
             )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder_config, "use_attention_mask") and self.text_encoder_config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask.to(device)
             else:
                 attention_mask = None
@@ -482,10 +488,10 @@ class StableDiffusionPipeline(
             negative_prompt_embeds = negative_prompt_embeds.repeat(1, num_images_per_prompt, 1)
             negative_prompt_embeds = negative_prompt_embeds.view(batch_size * num_images_per_prompt, seq_len, -1)
 
-        if self.text_encoder is not None:
-            if isinstance(self, StableDiffusionLoraLoaderMixin) and USE_PEFT_BACKEND:
-                # Retrieve the original scale by scaling back the LoRA layers
-                unscale_lora_layers(self.text_encoder, lora_scale)
+        #if self.text_encoder is not None:
+        #    if isinstance(self, StableDiffusionLoraLoaderMixin) and USE_PEFT_BACKEND:
+        #        # Retrieve the original scale by scaling back the LoRA layers
+        #        unscale_lora_layers(self.text_encoder, lora_scale)
 
         return prompt_embeds, negative_prompt_embeds
 
@@ -739,7 +745,7 @@ class StableDiffusionPipeline(
     # corresponds to doing no classifier free guidance.
     @property
     def do_classifier_free_guidance(self):
-        return self._guidance_scale > 1 and self.unet.config.time_cond_proj_dim is None
+        return self._guidance_scale > 1 and self.unet_config.time_cond_proj_dim is None
 
     @property
     def cross_attention_kwargs(self):
@@ -890,8 +896,8 @@ class StableDiffusionPipeline(
             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
 
         # 0. Default height and width to unet
-        height = height or self.unet.config.sample_size * self.vae_scale_factor
-        width = width or self.unet.config.sample_size * self.vae_scale_factor
+        height = height or self.unet_config.sample_size * self.vae_scale_factor
+        width = width or self.unet_config.sample_size * self.vae_scale_factor
         # to deal with lora scaling and other possible forward hooks
 
         # 1. Check inputs. Raise error if not correct
@@ -962,7 +968,7 @@ class StableDiffusionPipeline(
         )
 
         # 5. Prepare latent variables
-        num_channels_latents = self.unet.config.in_channels
+        num_channels_latents = self.unet_config.in_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -986,10 +992,10 @@ class StableDiffusionPipeline(
 
         # 6.2 Optionally get Guidance Scale Embedding
         timestep_cond = None
-        if self.unet.config.time_cond_proj_dim is not None:
+        if self.unet_config.time_cond_proj_dim is not None:
             guidance_scale_tensor = torch.tensor(self.guidance_scale - 1).repeat(batch_size * num_images_per_prompt)
             timestep_cond = self.get_guidance_scale_embedding(
-                guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
+                guidance_scale_tensor, embedding_dim=self.unet_config.time_cond_proj_dim
             ).to(device=device, dtype=latents.dtype)
 
         # 7. Denoising loop

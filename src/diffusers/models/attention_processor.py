@@ -741,7 +741,7 @@ class AttnProcessor:
         if input_ndim == 4:
             batch_size, channel, height, width = hidden_states.shape
             hidden_states = hidden_states.view(batch_size, channel, height * width).transpose(1, 2)
-
+        
         batch_size, sequence_length, _ = (
             hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
         )
@@ -2352,10 +2352,13 @@ class AttnProcessor2_0:
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
 
-        query = query.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
+        q_length = query.shape[1]
+        k_length = key.shape[1]
 
-        key = key.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
-        value = value.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
+        query = query.view(batch_size, q_length, attn.heads, head_dim).transpose(1, 2)
+
+        key = key.view(batch_size, k_length, attn.heads, head_dim).transpose(1, 2)
+        value = value.view(batch_size, k_length, attn.heads, head_dim).transpose(1, 2)
 
         if attn.norm_q is not None:
             query = attn.norm_q(query)
