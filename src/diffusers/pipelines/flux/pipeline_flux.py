@@ -198,6 +198,11 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
         )
         self.default_sample_size = 64
 
+        self.transformer_config = self.transformer.config
+        self.transformer_dtype = self.transformer.dtype
+        self.text_encoder_dtype = self.text_encoder.dtype
+        self.text_encoder_2_dtype = self.text_encoder_2.dtype
+
     def _get_t5_prompt_embeds(
         self,
         prompt: Union[str, List[str]] = None,
@@ -207,7 +212,7 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
         dtype: Optional[torch.dtype] = None,
     ):
         device = device or self._execution_device
-        dtype = dtype or self.text_encoder.dtype
+        dtype = dtype or self.text_encoder_dtype
 
         prompt = [prompt] if isinstance(prompt, str) else prompt
         batch_size = len(prompt)
@@ -233,7 +238,7 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
 
         prompt_embeds = self.text_encoder_2(text_input_ids.to(device), output_hidden_states=False)[0]
 
-        dtype = self.text_encoder_2.dtype
+        dtype = self.text_encoder_2_dtype
         prompt_embeds = prompt_embeds.to(dtype=dtype, device=device)
 
         _, seq_len, _ = prompt_embeds.shape
@@ -277,7 +282,7 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
 
         # Use pooled output of CLIPTextModel
         prompt_embeds = prompt_embeds.pooler_output
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype, device=device)
+        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder_dtype, device=device)
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.repeat(1, num_images_per_prompt)
@@ -359,7 +364,7 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
                 # Retrieve the original scale by scaling back the LoRA layers
                 unscale_lora_layers(self.text_encoder_2, lora_scale)
 
-        dtype = self.text_encoder.dtype if self.text_encoder is not None else self.transformer.dtype
+        dtype = self.text_encoder_dtype if self.text_encoder is not None else self.transformer_dtype
         text_ids = torch.zeros(prompt_embeds.shape[1], 3).to(device=device, dtype=dtype)
 
         return prompt_embeds, pooled_prompt_embeds, text_ids
@@ -667,7 +672,7 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
         )
 
         # 4. Prepare latent variables
-        num_channels_latents = self.transformer.config.in_channels // 4
+        num_channels_latents = self.transformer_config.in_channels // 4
         latents, latent_image_ids = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -701,14 +706,20 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
         self._num_timesteps = len(timesteps)
 
         # handle guidance
-        if self.transformer.config.guidance_embeds:
+        transformers_kwargs = {}
+        if self.transformer_config.guidance_embeds:
             guidance = torch.full([1], guidance_scale, device=device, dtype=torch.float32)
             guidance = guidance.expand(latents.shape[0])
-        else:
-            guidance = None
+            transformers_kwargs['guidance'] = guidance
+        #else:
+            #guidance = None
+        if joint_attention_kwargs is not None:
+            transformers_kwargs['joint_attention_kwargs'] = joint_attention_kwargs
 
         # 6. Denoising loop
-        with self.progress_bar(total=num_inference_steps) as progress_bar:
+        #with self.progress_bar(total=num_inference_steps) as progress_bar:
+        from  contextlib import nullcontext
+        with nullcontext():
             for i, t in enumerate(timesteps):
                 if self.interrupt:
                     continue
@@ -719,13 +730,14 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
                 noise_pred = self.transformer(
                     hidden_states=latents,
                     timestep=timestep / 1000,
-                    guidance=guidance,
+                    #guidance=guidance,
                     pooled_projections=pooled_prompt_embeds,
                     encoder_hidden_states=prompt_embeds,
                     txt_ids=text_ids,
                     img_ids=latent_image_ids,
-                    joint_attention_kwargs=self.joint_attention_kwargs,
+                    #joint_attention_kwargs=self.joint_attention_kwargs,
                     return_dict=False,
+                    **transformers_kwargs,
                 )[0]
 
                 # compute the previous noisy sample x_t -> x_t-1
@@ -747,8 +759,8 @@ class FluxPipeline(DiffusionPipeline, FluxLoraLoaderMixin, FromSingleFileMixin):
                     prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
-                    progress_bar.update()
+                #if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
+                #    progress_bar.update()
 
                 if XLA_AVAILABLE:
                     xm.mark_step()
