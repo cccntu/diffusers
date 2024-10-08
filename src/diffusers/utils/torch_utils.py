@@ -76,9 +76,9 @@ def randn_tensor(
             torch.randn(shape, generator=generator[i], device=rand_device, dtype=dtype, layout=layout)
             for i in range(batch_size)
         ]
-        latents = torch.cat(latents, dim=0).to(device)
+        latents = torch.cat(latents, dim=0).to(device, non_blocking=True)
     else:
-        latents = torch.randn(shape, generator=generator, device=rand_device, dtype=dtype, layout=layout).to(device)
+        latents = torch.randn(shape, generator=generator, device=rand_device, dtype=dtype, layout=layout).to(device, non_blocking=True)
 
     return latents
 
